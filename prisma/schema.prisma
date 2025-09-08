@@ -1,0 +1,395 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model ConstructionSite {
+  id                     Int                 @id @default(autoincrement())
+  siteCode               String              @unique @map("site_code") @db.VarChar(20)
+  siteName               String              @map("site_name") @db.VarChar(200)
+  province               String              @db.VarChar(100)
+  district               String              @db.VarChar(100)
+  sector                 String              @db.VarChar(100)
+  cell                   String              @db.VarChar(100)
+  village                String              @db.VarChar(100)
+  projectManager         String?             @map("project_manager") @db.VarChar(100)
+  contactPhone           String?             @map("contact_phone") @db.VarChar(20)
+  workingHoursStart      String              @default("08:00") @map("working_hours_start")
+  workingHoursEnd        String              @default("17:00") @map("working_hours_end")
+  standardHoursPerDay    Decimal             @default(8.0) @map("standard_hours_per_day") @db.Decimal(3, 1)
+  overtimeRateMultiplier Decimal             @default(1.50) @map("overtime_rate_multiplier") @db.Decimal(3, 2)
+  status                 SiteStatus          @default(ACTIVE)
+  isActive               Boolean             @default(true) @map("is_active")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+  attendanceRecords      AttendanceRecord[]
+  dailyReports           DailyReport[]
+  fingerprintDevices     FingerprintDevice[]
+  payrollRecords         PayrollRecord[]
+  siteJobRates           SiteJobRate[]
+  workers                Worker[]
+
+  @@map("construction_sites")
+}
+
+model JobType {
+  id                 Int           @id @default(autoincrement())
+  jobCode            String        @unique @map("job_code") @db.VarChar(20)
+  jobName            String        @map("job_name") @db.VarChar(100)
+  description        String?       @db.Text
+  category           String?       @db.VarChar(50)
+  baseDailyRate      Decimal       @map("base_daily_rate") @db.Decimal(10, 2)
+  overtimeMultiplier Decimal       @default(1.50) @map("overtime_multiplier") @db.Decimal(3, 2)
+  isActive           Boolean       @default(true) @map("is_active")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  siteJobRates       SiteJobRate[]
+  workers            Worker[]
+
+  @@map("job_types")
+}
+
+model SiteJobRate {
+  id               Int              @id @default(autoincrement())
+  siteId           Int              @map("site_id")
+  jobTypeId        Int              @map("job_type_id")
+  siteSpecificRate Decimal          @map("site_specific_rate") @db.Decimal(10, 2)
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  jobType          JobType          @relation(fields: [jobTypeId], references: [id])
+  site             ConstructionSite @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, jobTypeId])
+  @@index([jobTypeId], map: "site_job_rates_job_type_id_fkey")
+  @@map("site_job_rates")
+}
+
+model Worker {
+  id                     Int                    @id @default(autoincrement())
+  employeeId             String                 @unique @map("employee_id") @db.VarChar(50)
+  firstName              String                 @map("first_name") @db.VarChar(100)
+  lastName               String                 @map("last_name") @db.VarChar(100)
+  phone                  String?                @db.VarChar(20)
+  email                  String?                @db.VarChar(255)
+  nationalId             String?                @unique @map("national_id") @db.VarChar(50)
+  status                 WorkerStatus           @default(ACTIVE)
+  bankAccount            String?                @map("bank_account") @db.VarChar(50)
+  bankName               String?                @map("bank_name") @db.VarChar(100)
+  mobileMoneyNumber      String?                @map("mobile_money_number") @db.VarChar(20)
+  mobileMoneyProvider    MobileMoneyProvider?   @map("mobile_money_provider")
+  airtelMoneyNumber      String?                @map("airtel_money_number") @db.VarChar(20)
+  airtelMoneyProvider    AirtelMoneyProvider?   @map("airtel_money_provider")
+  preferredPaymentMethod PreferredPaymentMethod @default(BANK_TRANSFER) @map("preferred_payment_method")
+  emergencyContactName   String?                @map("emergency_contact_name") @db.VarChar(100)
+  emergencyContactPhone  String?                @map("emergency_contact_phone") @db.VarChar(20)
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+  assignedSiteId         Int                    @map("assigned_site_id")
+  jobTypeId              Int                    @map("job_type_id")
+  attendanceRecords      AttendanceRecord[]
+  fingerprintTemplates   FingerprintTemplate[]
+  payrollRecords         PayrollRecord[]
+  assignedSite           ConstructionSite       @relation(fields: [assignedSiteId], references: [id])
+  jobType                JobType                @relation(fields: [jobTypeId], references: [id])
+
+  @@index([assignedSiteId], map: "workers_assigned_site_id_fkey")
+  @@index([jobTypeId], map: "workers_job_type_id_fkey")
+  @@map("workers")
+}
+
+model FingerprintTemplate {
+  id              Int              @id @default(autoincrement())
+  workerId        Int              @map("worker_id")
+  fingerPosition  FingerPosition   @map("finger_position")
+  hand            Hand
+  templateData    String           @map("template_data") @db.Text
+  qualityScore    Int              @map("quality_score") @db.UnsignedTinyInt
+  enrollmentDate  DateTime         @default(now()) @map("enrollment_date")
+  enrolledBy      String?          @map("enrolled_by") @db.VarChar(100)
+  deviceUsed      String?          @map("device_used") @db.VarChar(100)
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  fingerprintLogs FingerprintLog[]
+  worker          Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId], map: "fingerprint_templates_worker_id_fkey")
+  @@map("fingerprint_templates")
+}
+
+model FingerprintDevice {
+  id              Int               @id @default(autoincrement())
+  deviceId        String            @unique @map("device_id") @db.VarChar(50)
+  deviceName      String            @map("device_name") @db.VarChar(100)
+  siteId          Int?              @map("site_id")
+  manufacturer    String?           @db.VarChar(100)
+  model           String?           @db.VarChar(100)
+  serialNumber    String?           @unique @map("serial_number") @db.VarChar(100)
+  firmwareVersion String?           @map("firmware_version") @db.VarChar(50)
+  ipAddress       String?           @map("ip_address") @db.VarChar(15)
+  macAddress      String?           @map("mac_address") @db.VarChar(17)
+  isOnline        Boolean           @default(false) @map("is_online")
+  isActive        Boolean           @default(true) @map("is_active")
+  lastPing        DateTime?         @map("last_ping")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  site            ConstructionSite? @relation(fields: [siteId], references: [id])
+  fingerprintLogs FingerprintLog[]
+
+  @@index([siteId], map: "fingerprint_devices_site_id_fkey")
+  @@map("fingerprint_devices")
+}
+
+model AttendanceRecord {
+  id                  Int              @id @default(autoincrement())
+  workerId            Int              @map("worker_id")
+  siteId              Int              @map("site_id")
+  attendanceDate      DateTime         @map("attendance_date")
+  checkInTime         DateTime?        @map("check_in_time")
+  checkOutTime        DateTime?        @map("check_out_time")
+  totalHours          Decimal?         @map("total_hours") @db.Decimal(4, 2)
+  regularHours        Decimal?         @map("regular_hours") @db.Decimal(4, 2)
+  overtimeHours       Decimal          @default(0.00) @map("overtime_hours") @db.Decimal(4, 2)
+  breakTimeMinutes    Int              @default(0) @map("break_time_minutes")
+  status              AttendanceStatus @default(PRESENT)
+  checkOutMethod      CheckOutMethod   @default(FINGERPRINT) @map("check_out_method")
+  fingerprintVerified Boolean          @default(false) @map("fingerprint_verified")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+  site                ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  worker              Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  fingerprintLogs     FingerprintLog[]
+
+  @@unique([workerId, siteId, attendanceDate])
+  @@index([siteId], map: "attendance_records_site_id_fkey")
+  @@map("attendance_records")
+}
+
+model FingerprintLog {
+  id                 Int                  @id @default(autoincrement())
+  attendanceRecordId Int?                 @map("attendance_record_id")
+  workerId           Int?                 @map("worker_id")
+  deviceId           Int?                 @map("device_id")
+  matchScore         Int?                 @map("match_score") @db.UnsignedTinyInt
+  matchedTemplateId  Int?                 @map("matched_template_id")
+  scanTimestamp      DateTime             @default(now()) @map("scan_timestamp")
+  scanQuality        Int?                 @map("scan_quality") @db.UnsignedTinyInt
+  matchResult        MatchResult          @map("match_result")
+  errorMessage       String?              @map("error_message") @db.VarChar(500)
+  createdAt          DateTime             @default(now()) @map("created_at")
+  attendanceRecord   AttendanceRecord?    @relation(fields: [attendanceRecordId], references: [id])
+  device             FingerprintDevice?   @relation(fields: [deviceId], references: [id])
+  matchedTemplate    FingerprintTemplate? @relation(fields: [matchedTemplateId], references: [id])
+
+  @@index([attendanceRecordId], map: "fingerprint_logs_attendance_record_id_fkey")
+  @@index([deviceId], map: "fingerprint_logs_device_id_fkey")
+  @@index([matchedTemplateId], map: "fingerprint_logs_matched_template_id_fkey")
+  @@map("fingerprint_logs")
+}
+
+model PayrollRecord {
+  id               Int              @id @default(autoincrement())
+  workerId         Int              @map("worker_id")
+  siteId           Int              @map("site_id")
+  payPeriodStart   DateTime         @map("pay_period_start")
+  payPeriodEnd     DateTime         @map("pay_period_end")
+  payPeriodType    PayPeriodType    @map("pay_period_type")
+  totalDaysWorked  Int              @map("total_days_worked")
+  totalHours       Decimal          @map("total_hours") @db.Decimal(6, 2)
+  regularHours     Decimal          @map("regular_hours") @db.Decimal(6, 2)
+  overtimeHours    Decimal          @default(0.00) @map("overtime_hours") @db.Decimal(6, 2)
+  dailyRate        Decimal          @map("daily_rate") @db.Decimal(10, 2)
+  regularPay       Decimal          @map("regular_pay") @db.Decimal(10, 2)
+  overtimePay      Decimal          @default(0.00) @map("overtime_pay") @db.Decimal(10, 2)
+  grossPay         Decimal          @map("gross_pay") @db.Decimal(10, 2)
+  netPay           Decimal          @map("net_pay") @db.Decimal(10, 2)
+  paymentStatus    PaymentStatus    @default(PENDING) @map("payment_status")
+  paymentMethod    PaymentMethod?   @map("payment_method")
+  paymentDate      DateTime?        @map("payment_date")
+  paymentReference String?          @map("payment_reference") @db.VarChar(100)
+  calculatedBy     String?          @map("calculated_by") @db.VarChar(100)
+  approvedBy       String?          @map("approved_by") @db.VarChar(100)
+  approvedAt       DateTime?        @map("approved_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  site             ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  worker           Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, siteId, payPeriodStart])
+  @@index([siteId], map: "payroll_records_site_id_fkey")
+  @@map("payroll_records")
+}
+
+model SystemConfig {
+  id          Int        @id @default(autoincrement())
+  configKey   String     @unique @map("config_key") @db.VarChar(100)
+  configValue String     @map("config_value") @db.Text
+  configType  ConfigType @map("config_type")
+  description String?    @db.VarChar(500)
+  modifiedBy  String?    @map("modified_by") @db.VarChar(100)
+  modifiedAt  DateTime?  @map("modified_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+
+model DailyReport {
+  id                    Int              @id @default(autoincrement())
+  siteId                Int              @map("site_id")
+  reportDate            DateTime         @map("report_date")
+  totalWorkersAssigned  Int              @map("total_workers_assigned")
+  totalWorkersPresent   Int              @map("total_workers_present")
+  totalWorkersAbsent    Int              @map("total_workers_absent")
+  totalHoursWorked      Decimal          @map("total_hours_worked") @db.Decimal(8, 2)
+  totalOvertimeHours    Decimal          @map("total_overtime_hours") @db.Decimal(8, 2)
+  totalLaborCost        Decimal          @map("total_labor_cost") @db.Decimal(12, 2)
+  averageHoursPerWorker Decimal          @map("average_hours_per_worker") @db.Decimal(4, 2)
+  generatedBy           String?          @map("generated_by") @db.VarChar(100)
+  reportStatus          ReportStatus     @default(DRAFT) @map("report_status")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  site                  ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, reportDate])
+  @@map("daily_reports")
+}
+
+enum SiteStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
+  ON_HOLD
+
+  @@map("site_status")
+}
+
+enum WorkerStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+  ON_LEAVE
+
+  @@map("worker_status")
+}
+
+enum MobileMoneyProvider {
+  MTN_MOMO
+  AIRTEL_MONEY
+
+  @@map("mobile_money_provider")
+}
+
+enum AirtelMoneyProvider {
+  AIRTEL_MONEY
+
+  @@map("airtel_money_provider")
+}
+
+enum PreferredPaymentMethod {
+  BANK_TRANSFER
+  CASH
+  MOBILE_MONEY
+  AIRTEL_MONEY
+  CHECK
+
+  @@map("preferred_payment_method")
+}
+
+enum FingerPosition {
+  THUMB
+  INDEX
+  MIDDLE
+  RING
+  PINKY
+
+  @@map("finger_position")
+}
+
+enum Hand {
+  LEFT
+  RIGHT
+
+  @@map("hand")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  OVERTIME
+  EARLY_DEPARTURE
+
+  @@map("attendance_status")
+}
+
+enum CheckOutMethod {
+  FINGERPRINT
+  MANUAL
+  EMERGENCY_OVERRIDE
+
+  @@map("checkout_method")
+}
+
+enum MatchResult {
+  SUCCESS
+  NO_MATCH
+  POOR_QUALITY
+  DEVICE_ERROR
+  MULTIPLE_MATCHES
+
+  @@map("match_result")
+}
+
+enum PayPeriodType {
+  WEEKLY
+  BI_WEEKLY
+  MONTHLY
+
+  @@map("pay_period_type")
+}
+
+enum PaymentStatus {
+  PENDING
+  CALCULATED
+  APPROVED
+  PAID
+  CANCELLED
+
+  @@map("payment_status")
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  MOBILE_MONEY
+  AIRTEL_MONEY
+  CHECK
+
+  @@map("payment_method")
+}
+
+enum ConfigType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+
+  @@map("config_type")
+}
+
+enum ReportStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+
+  @@map("report_status")
+}

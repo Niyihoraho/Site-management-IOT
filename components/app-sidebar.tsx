@@ -16,6 +16,8 @@ import {
   IconWallet,
   IconBriefcase,
   IconFingerprint,
+  IconChartBar,
+  IconArrowRight,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -42,6 +44,11 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: IconDashboard,
+    },
+    {
+      title: "Executive Dashboard",
+      url: "/executive-dashboard",
+      icon: IconChartBar,
     },
     {
       title: "Construction Sites",
@@ -77,6 +84,21 @@ const data = {
       title: "Payroll",
       url: "/payroll",
       icon: IconWallet,
+    },
+    {
+      title: "Pending Payments",
+      url: "/pending-payments",
+      icon: IconListCheck,
+    },
+    {
+      title: "Payroll Reports",
+      url: "/payroll-reports",
+      icon: IconReport,
+    },
+    {
+      title: "Attendance → Payroll Flow",
+      url: "/attendance-payroll-flow",
+      icon: IconArrowRight,
     },
   ],
   navSecondary: [

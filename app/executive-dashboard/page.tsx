@@ -86,6 +86,7 @@ export default function ExecutiveDashboardPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('week')
   const [selectedSite, setSelectedSite] = useState('all')
   const [sites, setSites] = useState<any[]>([])
+  const [generatingReport, setGeneratingReport] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -118,14 +119,26 @@ export default function ExecutiveDashboardPage() {
 
       setSites(sitesData)
 
-      // Calculate executive summary - use all data, not just today
+      // Filter data by selected site
+      let filteredAttendanceData = attendanceData
+      let filteredPayrollData = payrollData
+      let filteredWorkersData = workersData
+
+      if (selectedSite !== 'all') {
+        const siteId = parseInt(selectedSite)
+        filteredAttendanceData = attendanceData.filter((record: any) => record.siteId === siteId)
+        filteredPayrollData = payrollData.filter((record: any) => record.siteId === siteId)
+        filteredWorkersData = workersData.filter((worker: any) => worker.assignedSiteId === siteId)
+      }
+
+      // Calculate executive summary - use filtered data
       const today = new Date().toISOString().split('T')[0]
-      const todayAttendance = attendanceData.filter((record: any) => 
+      const todayAttendance = filteredAttendanceData.filter((record: any) => 
         record.attendanceDate.startsWith(today)
       )
 
       // For comprehensive view, also calculate all-time stats
-      const allAttendance = attendanceData.filter((record: any) => 
+      const allAttendance = filteredAttendanceData.filter((record: any) => 
         record.status === 'PRESENT' || record.status === 'LATE' || record.status === 'OVERTIME'
       )
 
@@ -137,7 +150,7 @@ export default function ExecutiveDashboardPage() {
         record.status === 'LATE'
       ).length
 
-      const absentToday = workersData.length - presentToday
+      const absentToday = filteredWorkersData.length - presentToday
 
       const totalHoursWorked = todayAttendance.reduce((sum: number, record: any) => 
         sum + validateNumber(record.totalHours), 0
@@ -146,11 +159,11 @@ export default function ExecutiveDashboardPage() {
       // Calculate total attendance days across all time
       const totalAttendanceDays = allAttendance.length
 
-      const pendingPayroll = payrollData.filter((record: any) => 
+      const pendingPayroll = filteredPayrollData.filter((record: any) => 
         record.paymentStatus === 'PENDING'
       )
 
-      const paidPayroll = payrollData.filter((record: any) => 
+      const paidPayroll = filteredPayrollData.filter((record: any) => 
         record.paymentStatus === 'PAID'
       )
 
@@ -164,7 +177,7 @@ export default function ExecutiveDashboardPage() {
 
       const executiveSummary: ExecutiveSummary = {
         attendance: {
-          totalWorkers: workersData.length,
+          totalWorkers: filteredWorkersData.length,
           presentToday,
           lateToday,
           absentToday,
@@ -204,13 +217,17 @@ export default function ExecutiveDashboardPage() {
 
       setSummary(executiveSummary)
 
-      // Calculate site performance
-      const sitePerf: SitePerformance[] = sitesData.map((site: any) => {
-        const siteWorkers = workersData.filter((worker: any) => worker.assignedSiteId === site.id)
-        const siteAttendance = attendanceData.filter((record: any) => 
+      // Calculate site performance - filter sites if specific site selected
+      const sitesToAnalyze = selectedSite !== 'all' ? 
+        sitesData.filter((site: any) => site.id.toString() === selectedSite) : 
+        sitesData
+
+      const sitePerf: SitePerformance[] = sitesToAnalyze.map((site: any) => {
+        const siteWorkers = filteredWorkersData.filter((worker: any) => worker.assignedSiteId === site.id)
+        const siteAttendance = filteredAttendanceData.filter((record: any) => 
           record.siteId === site.id && record.attendanceDate.startsWith(today)
         )
-        const sitePayroll = payrollData.filter((record: any) => record.siteId === site.id)
+        const sitePayroll = filteredPayrollData.filter((record: any) => record.siteId === site.id)
 
         const presentWorkers = siteAttendance.filter((record: any) => 
           record.status === 'PRESENT' || record.status === 'LATE' || record.status === 'OVERTIME'
@@ -241,12 +258,12 @@ export default function ExecutiveDashboardPage() {
 
       setSitePerformance(sitePerf)
 
-      // Calculate worker performance
-      const workerPerf: WorkerPerformance[] = workersData.map((worker: any) => {
-        const workerAttendance = attendanceData.filter((record: any) => 
+      // Calculate worker performance - use filtered data
+      const workerPerf: WorkerPerformance[] = filteredWorkersData.map((worker: any) => {
+        const workerAttendance = filteredAttendanceData.filter((record: any) => 
           record.workerId === worker.id
         )
-        const workerPayroll = payrollData.filter((record: any) => record.workerId === worker.id)
+        const workerPayroll = filteredPayrollData.filter((record: any) => record.workerId === worker.id)
 
         const daysWorked = workerAttendance.filter((record: any) => 
           record.status === 'PRESENT' || record.status === 'LATE' || record.status === 'OVERTIME'
@@ -300,6 +317,40 @@ export default function ExecutiveDashboardPage() {
   const validateNumber = (value: any, defaultValue: number = 0): number => {
     const num = Number(value)
     return isNaN(num) ? defaultValue : num
+  }
+
+  const generatePDFReport = async () => {
+    try {
+      setGeneratingReport(true)
+      
+      const response = await axios.get('/api/reports/management', {
+        responseType: 'blob',
+        params: {
+          type: 'comprehensive',
+          siteId: selectedSite !== 'all' ? selectedSite : undefined,
+          dateFrom: selectedPeriod === 'week' ? 
+            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined,
+          dateTo: new Date().toISOString().split('T')[0]
+        }
+      })
+
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `management-report-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+    } catch (error) {
+      console.error('Error generating PDF report:', error)
+      alert('Failed to generate PDF report. Please try again.')
+    } finally {
+      setGeneratingReport(false)
+    }
   }
 
   const getTrendIcon = (trend: string) => {
@@ -427,13 +478,31 @@ export default function ExecutiveDashboardPage() {
                     <SelectItem value="month">This Month</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={selectedSite} onValueChange={setSelectedSite}>
+                  <SelectTrigger className="w-[150px] bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="All Sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sites</SelectItem>
+                    {sites.map((site) => (
+                      <SelectItem key={site.id} value={site.id.toString()}>
+                        {site.siteName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button 
                   variant="outline" 
                   className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
-                  onClick={downloadExecutiveReport}
+                  onClick={generatePDFReport}
+                  disabled={generatingReport}
                 >
-                  <IconFileText className="mr-2 h-4 w-4" />
-                  Download Report
+                  {generatingReport ? (
+                    <IconLoader className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <IconFileText className="mr-2 h-4 w-4" />
+                  )}
+                  {generatingReport ? 'Generating PDF...' : 'Download PDF Report'}
                 </Button>
               </div>
             </div>

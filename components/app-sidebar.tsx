@@ -10,8 +10,6 @@ import {
   IconInnerShadowTop,
   IconListCheck,
   IconReport,
-  IconSearch,
-  IconSettings,
   IconUsers,
   IconWallet,
   IconBriefcase,
@@ -50,6 +48,8 @@ const data = {
       url: "/executive-dashboard",
       icon: IconChartBar,
     },
+  ],
+  navManagement: [
     {
       title: "Construction Sites",
       url: "/sites",
@@ -65,6 +65,8 @@ const data = {
       url: "/job-types",
       icon: IconBriefcase,
     },
+  ],
+  navOperations: [
     {
       title: "Attendance List",
       url: "/attendance",
@@ -76,11 +78,6 @@ const data = {
       icon: IconFingerprint,
     },
     {
-      title: "Attendance Report",
-      url: "/attendance-reports",
-      icon: IconReport,
-    },
-    {
       title: "Payroll",
       url: "/payroll",
       icon: IconWallet,
@@ -89,6 +86,13 @@ const data = {
       title: "Pending Payments",
       url: "/pending-payments",
       icon: IconListCheck,
+    },
+  ],
+  navReports: [
+    {
+      title: "Attendance Report",
+      url: "/attendance-reports",
+      icon: IconReport,
     },
     {
       title: "Payroll Reports",
@@ -101,23 +105,7 @@ const data = {
       icon: IconArrowRight,
     },
   ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "/settings",
-      icon: IconSettings,
-    },
-    {
-      title: "Get Help",
-      url: "/help",
-      icon: IconHelp,
-    },
-    {
-      title: "Search",
-      url: "/search",
-      icon: IconSearch,
-    },
-  ],
+
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -126,6 +114,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Determine active item based on current path
   const getActiveItem = () => {
     if (pathname === "/dashboard") return "Dashboard"
+    if (pathname === "/executive-dashboard") return "Executive Dashboard"
     if (pathname.startsWith("/sites")) return "Construction Sites"
     if (pathname.startsWith("/workers")) return "Workers"
     if (pathname.startsWith("/job-types")) return "Job Types"
@@ -134,7 +123,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return "Attendance List"
     }
     if (pathname.startsWith("/fingerprint")) return "Fingerprint Management"
-    if (pathname.startsWith("/payroll")) return "Payroll"
+    if (pathname.startsWith("/payroll")) {
+      if (pathname.includes("/reports")) return "Payroll Reports"
+      if (pathname.includes("/pending")) return "Pending Payments"
+      return "Payroll"
+    }
+    if (pathname.startsWith("/pending-payments")) return "Pending Payments"
+    if (pathname.startsWith("/payroll-reports")) return "Payroll Reports"
+    if (pathname.startsWith("/attendance-payroll-flow")) return "Attendance → Payroll Flow"
     return undefined
   }
 
@@ -157,7 +153,32 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} activeItem={getActiveItem()} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        
+        {/* Management Section */}
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight text-muted-foreground">
+            Management
+          </h2>
+          <NavMain items={data.navManagement} activeItem={getActiveItem()} />
+        </div>
+        
+        {/* Operations Section */}
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight text-muted-foreground">
+            Operations
+          </h2>
+          <NavMain items={data.navOperations} activeItem={getActiveItem()} />
+        </div>
+        
+        {/* Reports Section */}
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight text-muted-foreground">
+            Reports
+          </h2>
+          <NavMain items={data.navReports} activeItem={getActiveItem()} />
+        </div>
+        
+       
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />

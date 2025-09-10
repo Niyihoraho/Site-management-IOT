@@ -67,6 +67,7 @@ export default function AttendancePayrollFlowPage() {
   const [selectedSite, setSelectedSite] = useState('all')
   const [selectedStatus, setSelectedStatus] = useState('all')
   const [sites, setSites] = useState<any[]>([])
+  const [generatingReport, setGeneratingReport] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -222,6 +223,37 @@ export default function AttendancePayrollFlowPage() {
     return isNaN(num) ? defaultValue : num
   }
 
+  const generatePDFReport = async () => {
+    try {
+      setGeneratingReport(true)
+      
+      const response = await axios.get('/api/reports/management', {
+        responseType: 'blob',
+        params: {
+          type: 'comprehensive',
+          siteId: selectedSite !== 'all' ? selectedSite : undefined
+        }
+      })
+
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `attendance-payroll-flow-report-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+    } catch (error) {
+      console.error('Error generating PDF report:', error)
+      alert('Failed to generate PDF report. Please try again.')
+    } finally {
+      setGeneratingReport(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PAID':
@@ -328,10 +360,15 @@ export default function AttendancePayrollFlowPage() {
                 <Button 
                   variant="outline" 
                   className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
-                  onClick={downloadFlowReport}
+                  onClick={generatePDFReport}
+                  disabled={generatingReport}
                 >
-                  <IconFileText className="mr-2 h-4 w-4" />
-                  Download Flow Report
+                  {generatingReport ? (
+                    <IconLoader className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <IconFileText className="mr-2 h-4 w-4" />
+                  )}
+                  {generatingReport ? 'Generating PDF...' : 'Download PDF Report'}
                 </Button>
               </div>
             </div>

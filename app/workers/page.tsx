@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { 
   Table, 
   TableBody, 
@@ -18,7 +19,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table"
-import { IconUsers, IconSearch, IconPlus, IconPhone, IconMail, IconBuilding, IconEdit, IconEye, IconRefresh } from "@tabler/icons-react"
+import { IconUsers, IconSearch, IconPlus, IconPhone, IconMail, IconBuilding, IconEdit, IconEye, IconRefresh, IconTrash, IconWallet, IconId, IconUser, IconCreditCard, IconDeviceMobile, IconAlertTriangle } from "@tabler/icons-react"
 import { useEffect, useState } from "react"
 import axios from "axios"
 
@@ -69,6 +70,12 @@ export default function WorkersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deactivating, setDeactivating] = useState(false)
 
   const fetchWorkers = async () => {
     try {
@@ -98,6 +105,64 @@ export default function WorkersPage() {
     fetchWorkers()
   }, [])
 
+  const handleViewWorker = (worker: Worker) => {
+    setSelectedWorker(worker)
+    setViewModalOpen(true)
+  }
+
+  const handleEditWorker = (worker: Worker) => {
+    setSelectedWorker(worker)
+    setEditModalOpen(true)
+  }
+
+  const handleDeleteWorker = (worker: Worker) => {
+    setSelectedWorker(worker)
+    setDeleteModalOpen(true)
+  }
+
+  const confirmDeleteWorker = async () => {
+    if (!selectedWorker) return
+
+    try {
+      setDeleting(true)
+      await axios.delete(`/api/workers/${selectedWorker.id}`)
+      await fetchWorkers() // Refresh the list
+      setDeleteModalOpen(false)
+      setSelectedWorker(null)
+    } catch (error: any) {
+      console.error('Error deleting worker:', error)
+      
+      // Check if it's the specific error about attendance/payroll records
+      if (error.response?.data?.error?.includes('attendance records') || 
+          error.response?.data?.error?.includes('payroll records')) {
+        setError(error.response.data.error + ' You can deactivate the worker instead.')
+      } else {
+        setError(error.response?.data?.error || 'Failed to delete worker')
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const deactivateWorker = async () => {
+    if (!selectedWorker) return
+
+    try {
+      setDeactivating(true)
+      await axios.put(`/api/workers/${selectedWorker.id}`, {
+        status: 'INACTIVE'
+      })
+      await fetchWorkers() // Refresh the list
+      setDeleteModalOpen(false)
+      setSelectedWorker(null)
+    } catch (error: any) {
+      console.error('Error deactivating worker:', error)
+      setError(error.response?.data?.error || 'Failed to deactivate worker')
+    } finally {
+      setDeactivating(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "ACTIVE":
@@ -125,6 +190,21 @@ export default function WorkersPage() {
         return "bg-yellow-100 text-yellow-800"
       default:
         return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getPaymentMethodDisplay = (worker: Worker) => {
+    switch (worker.preferredPaymentMethod) {
+      case "BANK_TRANSFER":
+        return { icon: IconCreditCard, text: "Bank Transfer", details: worker.bankAccount ? `${worker.bankName} - ${worker.bankAccount}` : "No bank details" }
+      case "MOBILE_MONEY":
+        return { icon: IconDeviceMobile, text: "Mobile Money", details: worker.mobileMoneyNumber ? `${worker.mobileMoneyProvider} - ${worker.mobileMoneyNumber}` : "No mobile money details" }
+      case "AIRTEL_MONEY":
+        return { icon: IconDeviceMobile, text: "Airtel Money", details: worker.airtelMoneyNumber ? `${worker.airtelMoneyProvider} - ${worker.airtelMoneyNumber}` : "No Airtel money details" }
+      case "CASH":
+        return { icon: IconWallet, text: "Cash", details: "Cash payment" }
+      default:
+        return { icon: IconWallet, text: "Unknown", details: "No payment method set" }
     }
   }
 
@@ -187,9 +267,11 @@ export default function WorkersPage() {
                           <TableHead>Employee</TableHead>
                           <TableHead>Job Type</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Daily Rate</TableHead>
+                          <TableHead>Rates</TableHead>
                           <TableHead>Contact</TableHead>
                           <TableHead>Site</TableHead>
+                          <TableHead>Payment Method</TableHead>
+                          <TableHead>National ID</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -236,9 +318,11 @@ export default function WorkersPage() {
                           <TableHead>Employee</TableHead>
                           <TableHead>Job Type</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Daily Rate</TableHead>
+                          <TableHead>Rates</TableHead>
                           <TableHead>Contact</TableHead>
                           <TableHead>Site</TableHead>
+                          <TableHead>Payment Method</TableHead>
+                          <TableHead>National ID</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -266,9 +350,21 @@ export default function WorkersPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <span className="font-medium">
-                                RWF {worker.dailyRate ? worker.dailyRate.toLocaleString() : '0'}/day
-                              </span>
+                              <div className="space-y-1">
+                                <div className="font-medium">
+                                  RWF {worker.dailyRate ? worker.dailyRate.toLocaleString() : '0'}/day
+                                </div>
+                                {worker.overtimeRate && (
+                                  <div className="text-xs text-muted-foreground">
+                                    OT: RWF {worker.overtimeRate.toLocaleString()}/hr
+                                  </div>
+                                )}
+                                {worker.siteSpecificRate && (
+                                  <div className="text-xs text-blue-600">
+                                    Site: RWF {worker.siteSpecificRate.toLocaleString()}/day
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1">
@@ -292,13 +388,54 @@ export default function WorkersPage() {
                                 {worker.site?.siteName || "No site assigned"}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              <div className="flex items-center text-sm">
+                                {(() => {
+                                  const paymentMethod = getPaymentMethodDisplay(worker)
+                                  const IconComponent = paymentMethod.icon
+                                  return (
+                                    <>
+                                      <IconComponent className="mr-1 h-3 w-3" />
+                                      <span className="truncate max-w-[120px]" title={paymentMethod.details}>
+                                        {paymentMethod.text}
+                                      </span>
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center text-sm">
+                                <IconId className="mr-1 h-3 w-3" />
+                                {worker.nationalId || "Not provided"}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <Button variant="outline" size="sm">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleViewWorker(worker)}
+                                  title="View Details"
+                                >
                                   <IconEye className="h-4 w-4" />
                                 </Button>
-                                <Button variant="outline" size="sm">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleEditWorker(worker)}
+                                  title="Edit Worker"
+                                >
                                   <IconEdit className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleDeleteWorker(worker)}
+                                  title="Delete Worker"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <IconTrash className="h-4 w-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -313,6 +450,157 @@ export default function WorkersPage() {
           </div>
         </div>
       </SidebarInset>
+
+      {/* View Worker Modal */}
+      <Dialog open={viewModalOpen} onOpenChange={setViewModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Worker Details</DialogTitle>
+            <DialogDescription>
+              Complete information for {selectedWorker?.firstName} {selectedWorker?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedWorker && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Employee ID</label>
+                  <p className="text-sm font-mono">{selectedWorker.employeeId}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Full Name</label>
+                  <p className="text-sm">{selectedWorker.firstName} {selectedWorker.lastName}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">National ID</label>
+                  <p className="text-sm">{selectedWorker.nationalId || "Not provided"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <Badge className={getStatusColor(selectedWorker.status)}>
+                    {selectedWorker.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Job Information */}
+              <div>
+                <h3 className="text-lg font-medium mb-3">Job Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Job Type</label>
+                    <Badge className={getJobTypeColor(selectedWorker.jobType)}>
+                      {selectedWorker.jobType}
+                    </Badge>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Assigned Site</label>
+                    <p className="text-sm">{selectedWorker.site?.siteName || "No site assigned"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Information */}
+              <div>
+                <h3 className="text-lg font-medium mb-3">Payment Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Daily Rate</label>
+                    <p className="text-sm font-medium">RWF {selectedWorker.dailyRate?.toLocaleString() || '0'}/day</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Overtime Rate</label>
+                    <p className="text-sm">RWF {selectedWorker.overtimeRate?.toLocaleString() || '0'}/hr</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Site Specific Rate</label>
+                    <p className="text-sm">RWF {selectedWorker.siteSpecificRate?.toLocaleString() || '0'}/day</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Preferred Payment Method</label>
+                    <div className="flex items-center">
+                      {(() => {
+                        const paymentMethod = getPaymentMethodDisplay(selectedWorker)
+                        const IconComponent = paymentMethod.icon
+                        return (
+                          <>
+                            <IconComponent className="mr-2 h-4 w-4" />
+                            <span className="text-sm">{paymentMethod.text}</span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div>
+                <h3 className="text-lg font-medium mb-3">Contact Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Phone</label>
+                    <p className="text-sm">{selectedWorker.phone || "Not provided"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Email</label>
+                    <p className="text-sm">{selectedWorker.email || "Not provided"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Emergency Contact</label>
+                    <p className="text-sm">{selectedWorker.emergencyContactName || "Not provided"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Emergency Phone</label>
+                    <p className="text-sm">{selectedWorker.emergencyContactPhone || "Not provided"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Worker</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedWorker?.firstName} {selectedWorker?.lastName}? 
+              This action cannot be undone.
+              <br /><br />
+              <strong>Note:</strong> If this worker has attendance or payroll records, deletion will be prevented. 
+              In that case, you can deactivate the worker instead.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={deactivateWorker}
+              disabled={deactivating || deleting}
+            >
+              {deactivating ? "Deactivating..." : "Deactivate Instead"}
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteWorker}
+              disabled={deleting || deactivating}
+            >
+              {deleting ? "Deleting..." : "Delete Worker"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   )
 }
